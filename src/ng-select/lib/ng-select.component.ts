@@ -399,8 +399,8 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
         this.detectChanges();
     }
 
-    close() {
-        if (!this.isOpen || this._manualOpen) {
+    close(event?) {
+        if (!this.isOpen || this._manualOpen || (event && event.target.closest('mat-keyboard') !== null)) {
             return;
         }
         this.isOpen = false;
