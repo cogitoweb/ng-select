@@ -3794,7 +3794,7 @@ function createEvent(target = {}) {
     template: ``
 })
 class NgSelectTestCmp {
-    @ViewChild(NgSelectComponent, { static: false }) select: NgSelectComponent;
+    @ViewChild(NgSelectComponent) select: NgSelectComponent;
     multiple = false;
     label = 'Yes';
     clearOnBackspace = false;
