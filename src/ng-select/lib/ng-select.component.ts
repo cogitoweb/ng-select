@@ -86,6 +86,7 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
     @Input() addTagText: string;
     @Input() loadingText: string;
     @Input() clearAllText: string;
+    @Input() appearance: string;
     @Input() dropdownPosition: DropdownPosition = 'auto';
     @Input() appendTo: string;
     @Input() loading = false;
@@ -106,6 +107,10 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
     @Input() labelForId = null;
     @Input() inputAttrs: { [key: string]: string } = {};
     @Input() tabIndex: number;
+    @Input() readonly = false;
+    @Input() searchWhileComposing = true;
+    @Input() minTermLength = 0;
+    @Input() keyDownFn = (_: KeyboardEvent) => true;
 
     @Input() @HostBinding('class.ng-select-typeahead') typeahead: Subject<string>;
     @Input() @HostBinding('class.ng-select-multiple') multiple = false;
@@ -116,6 +121,7 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
 
     @Input()
     get items() { return this._items };
+
     set items(value: any[]) {
         this._itemsAreUsed = true;
         this._items = value;
@@ -123,6 +129,7 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
 
     @Input()
     get compareWith() { return this._compareWith; }
+
     set compareWith(fn: CompareWithFn) {
         if (!isFunction(fn)) {
             throw Error('`compareWith` must be a function.');
@@ -132,6 +139,7 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
 
     @Input()
     get clearSearchOnAdd() { return isDefined(this._clearSearchOnAdd) ? this._clearSearchOnAdd : this.closeOnSelect; };
+
     set clearSearchOnAdd(value) {
         this._clearSearchOnAdd = value;
     };
@@ -150,23 +158,24 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
     @Output('scrollToEnd') scrollToEnd = new EventEmitter();
 
     // custom templates
-    @ContentChild(NgOptionTemplateDirective, { read: TemplateRef, static: true }) optionTemplate: TemplateRef<any>;
-    @ContentChild(NgOptgroupTemplateDirective, { read: TemplateRef, static: true }) optgroupTemplate: TemplateRef<any>;
-    @ContentChild(NgLabelTemplateDirective, { read: TemplateRef, static: true }) labelTemplate: TemplateRef<any>;
-    @ContentChild(NgMultiLabelTemplateDirective, { read: TemplateRef, static: true }) multiLabelTemplate: TemplateRef<any>;
+    @ContentChild(NgOptionTemplateDirective, { read: TemplateRef, static: false }) optionTemplate: TemplateRef<any>;
+    @ContentChild(NgOptgroupTemplateDirective, { read: TemplateRef, static: false }) optgroupTemplate: TemplateRef<any>;
+    @ContentChild(NgLabelTemplateDirective, { read: TemplateRef, static: false }) labelTemplate: TemplateRef<any>;
+    @ContentChild(NgMultiLabelTemplateDirective, { read: TemplateRef, static: false }) multiLabelTemplate: TemplateRef<any>;
     @ContentChild(NgHeaderTemplateDirective, { read: TemplateRef, static: false }) headerTemplate: TemplateRef<any>;
     @ContentChild(NgFooterTemplateDirective, { read: TemplateRef, static: false }) footerTemplate: TemplateRef<any>;
-    @ContentChild(NgNotFoundTemplateDirective, { read: TemplateRef, static: true }) notFoundTemplate: TemplateRef<any>;
-    @ContentChild(NgTypeToSearchTemplateDirective, { read: TemplateRef, static: true }) typeToSearchTemplate: TemplateRef<any>;
-    @ContentChild(NgLoadingTextTemplateDirective, { read: TemplateRef, static: true }) loadingTextTemplate: TemplateRef<any>;
-    @ContentChild(NgTagTemplateDirective, { read: TemplateRef, static: true }) tagTemplate: TemplateRef<any>;
-    @ContentChild(NgLoadingSpinnerTemplateDirective, { read: TemplateRef, static: true }) loadingSpinnerTemplate: TemplateRef<any>;
+    @ContentChild(NgNotFoundTemplateDirective, { read: TemplateRef, static: false }) notFoundTemplate: TemplateRef<any>;
+    @ContentChild(NgTypeToSearchTemplateDirective, { read: TemplateRef, static: false }) typeToSearchTemplate: TemplateRef<any>;
+    @ContentChild(NgLoadingTextTemplateDirective, { read: TemplateRef, static: false }) loadingTextTemplate: TemplateRef<any>;
+    @ContentChild(NgTagTemplateDirective, { read: TemplateRef, static: false }) tagTemplate: TemplateRef<any>;
+    @ContentChild(NgLoadingSpinnerTemplateDirective, { read: TemplateRef, static: false }) loadingSpinnerTemplate: TemplateRef<any>;
 
     @ViewChild(forwardRef(() => NgDropdownPanelComponent), { static: false }) dropdownPanel: NgDropdownPanelComponent;
     @ViewChild('searchInput', { static: true }) searchInput: ElementRef<HTMLInputElement>;
     @ContentChildren(NgOptionComponent, { descendants: true }) ngOptions: QueryList<NgOptionComponent>;
 
-    @HostBinding('class.ng-select-disabled') disabled = false;
+    @HostBinding('class.ng-select-disabled') get disabled() { return this.readonly || this._disabled };
+
     @HostBinding('class.ng-select-filtered') get filtered() { return (!!this.searchTerm && this.searchable || this._isComposing) };
 
     itemsList: ItemsList;
@@ -182,16 +191,16 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
     private _defaultLabel = 'label';
     private _primitive;
     private _manualOpen: boolean;
+    private _disabled: boolean;
     private _pressedKeys: string[] = [];
     private _compareWith: CompareWithFn;
     private _clearSearchOnAdd: boolean;
+    private _isComposing = false;
 
     private readonly _destroy$ = new Subject<void>();
     private readonly _keyPress$ = new Subject<string>();
     private _onChange = (_: any) => { };
     private _onTouched = () => { };
-
-    private _isComposing = false;
 
     clearItem = (item: any) => {
         const option = this.selectedItems.find(x => x.value === item);
@@ -266,33 +275,41 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
 
     @HostListener('keydown', ['$event'])
     handleKeyDown($event: KeyboardEvent) {
-        if (KeyCode[$event.which]) {
-            switch ($event.which) {
-                case KeyCode.ArrowDown:
-                    this._handleArrowDown($event);
-                    break;
-                case KeyCode.ArrowUp:
-                    this._handleArrowUp($event);
-                    break;
-                case KeyCode.Space:
-                    this._handleSpace($event);
-                    break;
-                case KeyCode.Enter:
-                    this._handleEnter($event);
-                    break;
-                case KeyCode.Tab:
-                    this._handleTab($event);
-                    break;
-                case KeyCode.Esc:
-                    this.close();
-                    $event.preventDefault();
-                    break;
-                case KeyCode.Backspace:
-                    this._handleBackspace();
-                    break;
+        const keyCode = KeyCode[$event.which];
+        if (keyCode) {
+            if (this.keyDownFn($event) === false) {
+                return;
             }
+            this.handleKeyCode($event)
         } else if ($event.key && $event.key.length === 1) {
             this._keyPress$.next($event.key.toLocaleLowerCase());
+        }
+    }
+
+    handleKeyCode($event: KeyboardEvent) {
+        switch ($event.which) {
+            case KeyCode.ArrowDown:
+                this._handleArrowDown($event);
+                break;
+            case KeyCode.ArrowUp:
+                this._handleArrowUp($event);
+                break;
+            case KeyCode.Space:
+                this._handleSpace($event);
+                break;
+            case KeyCode.Enter:
+                this._handleEnter($event);
+                break;
+            case KeyCode.Tab:
+                this._handleTab($event);
+                break;
+            case KeyCode.Esc:
+                this.close();
+                $event.preventDefault();
+                break;
+            case KeyCode.Backspace:
+                this._handleBackspace();
+                break
         }
     }
 
@@ -369,8 +386,8 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
         this._onTouched = fn;
     }
 
-    setDisabledState(isDisabled: boolean): void {
-        this.disabled = isDisabled;
+    setDisabledState(state: boolean): void {
+        this._disabled = state;
         this._cd.markForCheck();
     }
 
@@ -491,11 +508,11 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
     };
 
     get showAddTag() {
-        if (!this.searchTerm) {
+        if (!this._validTerm) {
             return false;
         }
 
-        const term = this.searchTerm.toLowerCase();
+        const term = this.searchTerm.toLowerCase().trim();
         return this.addTag &&
             (!this.itemsList.filteredItems.some(x => x.label.toLowerCase() === term) &&
                 (!this.hideSelected && this.isOpen || !this.selectedItems.some(x => x.label.toLowerCase() === term))) &&
@@ -505,13 +522,13 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
     showNoItemsFound() {
         const empty = this.itemsList.filteredItems.length === 0;
         return ((empty && !this._isTypeahead && !this.loading) ||
-            (empty && this._isTypeahead && this.searchTerm && !this.loading)) &&
+            (empty && this._isTypeahead && this._validTerm && !this.loading)) &&
             !this.showAddTag;
     }
 
     showTypeToSearch() {
         const empty = this.itemsList.filteredItems.length === 0;
-        return empty && this._isTypeahead && !this.searchTerm && !this.loading;
+        return empty && this._isTypeahead && !this._validTerm && !this.loading;
     }
 
     onCompositionStart() {
@@ -520,14 +537,22 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
 
     onCompositionEnd(term: string) {
         this._isComposing = false;
+        if (this.searchWhileComposing) {
+            return;
+        }
+
         this.filter(term);
     }
 
     filter(term: string) {
-        if (this._isComposing) {
+        if (this._isComposing && !this.searchWhileComposing) {
             return;
         }
-        this._changeSearch(term);
+
+        this.searchTerm = term;
+        if (this._isTypeahead && (this._validTerm || this.minTermLength === 0)) {
+            this.typeahead.next(term);
+        }
 
         if (!this._isTypeahead) {
             this.itemsList.filter(this.searchTerm);
@@ -537,7 +562,6 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
         }
 
         this.searchEvent.emit({ term, items: this.itemsList.filteredItems.map(x => x.value) });
-
         this.open();
     }
 
@@ -754,13 +778,11 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
         }
 
         this._changeSearch(null);
-
         this.itemsList.resetFilteredItems();
     }
 
-    private _changeSearch(searchTerm) {
+    private _changeSearch(searchTerm: string) {
         this.searchTerm = searchTerm;
-
         if (this._isTypeahead) {
             this.typeahead.next(searchTerm);
         }
@@ -882,6 +904,11 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
         return this.typeahead && this.typeahead.observers.length > 0;
     }
 
+    private get _validTerm() {
+        const term = this.searchTerm && this.searchTerm.trim();
+        return term && term.length >= this.minTermLength;
+    }
+
     private _mergeGlobalConfig(config: NgSelectConfig) {
         this.placeholder = this.placeholder || config.placeholder;
         this.notFoundText = this.notFoundText || config.notFoundText;
@@ -893,5 +920,8 @@ export class NgSelectComponent implements OnDestroy, OnChanges, AfterViewInit, C
             ? this.virtualScroll
             : isDefined(config.disableVirtualScroll) ? !config.disableVirtualScroll : false;
         this.openOnEnter = isDefined(this.openOnEnter) ? this.openOnEnter : config.openOnEnter;
+        this.appendTo = this.appendTo || config.appendTo;
+        this.bindValue = this.bindValue || config.bindValue;
+        this.appearance = this.appearance || config.appearance;
     }
 }
