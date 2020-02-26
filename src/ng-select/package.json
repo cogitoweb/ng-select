@@ -1,6 +1,6 @@
 {
   "name": "@cogito/ng-select",
-  "version": "3.7.4",
+  "version": "3.7.3",
   "description": "Angular ng-select - All in One UI Select, Multiselect and Autocomplete",
   "author": "@cogito/ng-select",
   "license": "MIT",
@@ -19,8 +19,8 @@
     "angular2"
   ],
   "peerDependencies": {
-    "@angular/common": ">=8.0.0 <9.0.0",
-    "@angular/core": ">=8.0.0 <9.0.0",
-    "@angular/forms": ">=8.0.0 <9.0.0"
+    "@angular/common": ">=8.0.0",
+    "@angular/core": ">=8.0.0",
+    "@angular/forms": ">=8.0.0"
   }
 }
